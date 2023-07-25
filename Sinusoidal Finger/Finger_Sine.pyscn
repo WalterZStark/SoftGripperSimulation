@@ -1,0 +1,231 @@
+# -*- coding: utf-8 -*-
+# Author: Walter Stark
+# Soft and Bio Hybrid Robotics Class ETH Zurich
+# Assignment 3 Task 3
+# Code References(From Sofapython 3 Examples): example-scriptcontroller.py, Finger.pyscn
+
+
+#--------------------------------------------------------
+# Code Below from Derived Finger.pyscn by SOFA Framework
+#--------------------------------------------------------
+import sys
+locate_python = sys.exec_prefix
+
+print(locate_python)
+
+import Sofa
+import Sofa.Core
+import Sofa.Simulation
+import SofaRuntime
+import statistics
+SofaRuntime.importPlugin("SofaComponentAll")
+import math
+
+import os
+path = os.path.dirname(os.path.abspath(__file__))+'/mesh/'
+
+
+def createScene(rootNode):
+
+                rootNode.addObject('RequiredPlugin', pluginName='SoftRobots SoftRobots.Inverse SofaConstraint SofaDeformable SofaEngine SofaImplicitOdeSolver SofaLoader SofaOpenglVisual SofaSimpleFem SofaSparseSolver')
+                rootNode.addObject('VisualStyle', displayFlags='showVisualModels hideBehaviorModels showCollisionModels hideBoundingCollisionModels hideForceFields showInteractionForceFields hideWireframe')
+
+                rootNode.addObject('FreeMotionAnimationLoop')
+                rootNode.addObject('QPInverseProblemSolver', printLog=False)
+
+                rootNode.gravity = [0, -9180, 0]
+                rootNode.addObject('BackgroundSetting', color=[1,1,1,1])
+                rootNode.addObject('OglSceneFrame', style="Arrows", alignment="TopRight")
+
+                ##########################################
+                # FEM Model                              #
+                ##########################################
+                finger = rootNode.addChild('finger')
+                finger.addObject('EulerImplicitSolver', name='odesolver', firstOrder=True, rayleighMass=0.1, rayleighStiffness=0.1)
+                finger.addObject('SparseLDLSolver', template="CompressedRowSparseMatrixMat3x3d")
+                finger.addObject('MeshVTKLoader', name='loader', filename=path+'finger.vtk')
+                finger.addObject('MeshTopology', src='@loader', name='container')
+                finger.addObject('MechanicalObject', name='tetras', template='Vec3')
+                finger.addObject('UniformMass', totalMass=0.075)
+                finger.addObject('TetrahedronFEMForceField', template='Vec3', name='FEM', method='large', poissonRatio=0.3,  youngModulus=600)
+                finger.addObject('BoxROI', name='ROI1', box='-15 0 0 5 10 15', drawBoxes=True)
+                finger.addObject('RestShapeSpringsForceField', points='@ROI1.indices', stiffness=1e12)
+                finger.addObject('LinearSolverConstraintCorrection')
+
+                ##########################################
+                # Visualization                          #
+                ##########################################
+                fingerVisu = finger.addChild('visu')
+                fingerVisu.addObject('MeshSTLLoader', filename=path+"finger.stl", name="loader")
+                fingerVisu.addObject('OglModel', src="@loader", template='Vec3', color="0.0 0.7 0.7")
+                fingerVisu.addObject('BarycentricMapping')
+
+                ##########################################
+                # Cable                                  #
+                ##########################################
+                cable = finger.addChild('cable')
+                cable.addObject('MechanicalObject',
+                        position=[
+                                [-17.5, 12.5, 2.5],
+                                [-32.5, 12.5, 2.5],
+                                [-47.5, 12.5, 2.5],
+                                [-62.5, 12.5, 2.5],
+                                [-77.5, 12.5, 2.5],
+
+                                [-83.5, 12.5, 4.5],
+                                [-85.5, 12.5, 6.5],
+                                [-85.5, 12.5, 8.5],
+                                [-83.5, 12.5, 10.5],
+
+                                [-77.5, 12.5, 12.5],
+                                [-62.5, 12.5, 12.5],
+                                [-47.5, 12.5, 12.5],
+                                [-32.5, 12.5, 12.5],
+                                [-17.5, 12.5, 12.5]
+                                ])
+
+                # Set a maximum displacement for your cable
+                cable.addObject('CableActuator', name="aCable",
+                        indices=list(range(0,14)),
+                        pullPoint=[0.0, 12.5, 2.5],
+                        maxPositiveDisp=40,
+                        maxDispVariation=0.5,
+                        minForce=0)
+
+                cable.addObject('BarycentricMapping')
+
+
+                ##########################################
+                # Effector goal for interactive control  #
+                ##########################################
+                # Removed because isn't necessary
+                """
+                goal.addObject('EulerImplicitSolver', firstOrder=True)
+                goal.addObject('CGLinearSolver', iterations=100, tolerance=1e-5, threshold=1e-5)
+                goal.addObject('MechanicalObject', name='goalMO',
+                                  position=[-120,  7,  7])
+                goal.addObject('SphereCollisionModel', radius=5)
+                goal.addObject('UncoupledConstraintCorrection')
+                """
+                # Added dt defintion, not necessary
+                rootNode.dt = 0.01
+                ##########################################
+                # Effector                               #
+                ##########################################
+                effector = finger.addChild('fingertip')
+                
+                # Add Effector to tip of finger
+                effector.addObject('MechanicalObject', position=([-103,  7,  7]))
+                
+                
+                # Set initial goal of position effector
+                effector.addObject('PositionEffector', template='Vec3',
+                                    indices=0,
+                                    effectorGoal=[-70-30,  93.4-100,  6.76272189649]) # Found out how to change the position of the end effector
+                effector.addObject('BarycentricMapping')
+                # Define controller passing effector
+                controller = SineController(effector)
+
+                # Add the object to effector
+                effector.addObject(controller)
+
+                return rootNode
+
+
+                
+
+##########################################
+# Sinusoidal Controller                  #
+##########################################
+# Basic structure below based on https://github.com/sofa-framework/SofaPython3/blob/master/examples/example-scriptcontroller.py
+
+class SineController(Sofa.Core.Controller):
+        # Constructor
+        def __init__ (self, inputEffector, **kwargs):
+                
+                Sofa.Core.Controller.__init__(self,inputEffector,*kwargs)
+                
+                # Pass Effector to Class
+                self.effector = inputEffector
+
+                #Initialize Time
+                self.t = 0 
+
+                #Set initial values for Sine hyperameters
+                self.Ax = 30
+                self.Ay = 40
+                self.fx = 1
+                self.fy = 1
+                
+                #Hyper Parameter to speed up motion
+                self.time_factor = 100
+
+                #Set gain values, adjust based on results
+                self.k_p = 1.2
+                self.k_i = 5 # previously 0.01
+                self.k_d = 0.01 # did not end up using
+                
+                # Integral Errors
+                self.int_errorx = 0
+                self.int_errory = 0
+                
+                #Init cumulative error
+                self.tot_errorx = []
+                self.tot_errory = []
+                self.tot_errorz = []
+
+                #Init step number
+                self.step = 0
+
+        # Define actions that occur after animation
+        def onAnimateBeginEvent (self,dt):
+                
+                # Increment step
+                self.step += 1
+
+                # Define sine function
+                x = -self.Ax*math.sin(self.t/180*self.fx*math.pi) -70 # Subtracted 70 to make the sinsusodial path be more within the range of motion
+                y = -self.Ay*math.sin(self.t/180*self.fx*math.pi) + 33.4 + 3*self.Ay/2 # Keeping same frequency
+                
+                # Set effector goal
+                self.effector.PositionEffector.effectorGoal[0][0] = x
+                self.effector.PositionEffector.effectorGoal[0][1] = y
+                
+                # Calculate delta (error)
+                errorx = self.effector.PositionEffector.delta[0]
+                errory = self.effector.PositionEffector.delta[1]
+                errorz = self.effector.PositionEffector.delta[2]
+                
+
+                # Adjust parameters based on error                
+                self.int_errorx += errorx * dt['dt']
+                self.int_errory += errory * dt['dt']
+
+                # Add to error and find average error
+                self.tot_errorx.append(errorx)
+                self.tot_errory.append(errory)
+                self.tot_errorz.append(errorz)
+
+                # Calculate output to effector goal
+                output_x = self.k_p * errorx + self.k_i * self.int_errorx
+                output_y = self.k_p * errory + self.k_i * self.int_errory
+
+                # Set Effector Goal
+                self.effector.PositionEffector.effectorGoal[0][0] = x-errorx+output_x
+                self.effector.PositionEffector.effectorGoal[0][1] = y-errory+output_y
+                
+                # Find median values
+                medx = statistics.median(self.tot_errorx)
+                medy = statistics.median(self.tot_errory)
+                medz = statistics.median(self.tot_errorz)
+
+                # Print out median values
+                print('Median Error X: {} Median Error Y: {} Median Error Z: {}'.format(medx, medy, medz)) 
+                # Increment self.t
+                self.t= self.t+ dt['dt']* self.time_factor
+
+                
+        # Actions taken when animation ends
+        def onAnimateEndEvent(self,dt):
+               pass
+ 
