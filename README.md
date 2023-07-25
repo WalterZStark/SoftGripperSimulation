@@ -5,6 +5,7 @@ Soft gripper simulation from Soft and Biohybrid Robotics class at ETH Zurich
 For the Soft and Biohybrid Robotics class at ETH Zurich, I programmed a sinusoidally controlled soft finger and created/programmed a soft gripper for picking up objects. Soft grippers are known for having infinite degrees of freedom making them more difficult to control than conventional rigid actuators. These grippers are meant to simulate pneumatic pleated fluidic actuators. These tasks involved creating visual models, collision meshes, and surface meshes. ﻿
 
 Soft Finger:
+
 In this task, I made a controller that causes the soft finger to follow a sinusoidal trajectory. I implemented this by adjusting the position effector goal X and Y values overtime using sinusoidal functions. Both functions had the same frequency but had different intercept and amplitude values that were tuned to reduce error. I implemented two separate PI controllers for both the X and Y values to decrease the steady-state error. ﻿ Due to the PI controller, the median error was small. The median error in X, Y, and Z settled to around -0.13452357308895913mm, 0.1014554950440889mm, 0.10027013733151924mm respectively over time. The median tracking error (distance) based on these values was 0.19607118511mm. These values were pulled from one instance in time since they slightly change over time, but they stay within +/- 0.02mm of the above value. Overall, the finger moves smoothly in a sinusoidal trajectory with minimal error.
 
 Soft Gripper:
