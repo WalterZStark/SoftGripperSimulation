@@ -1,7 +1,7 @@
 # SoftGripperSimulation
 Soft gripper simulation from Soft and Biohybrid Robotics class at ETH Zurich
 
-﻿Code: 
+﻿
 For the Soft and Biohybrid Robotics class at ETH Zurich, I programmed a sinusoidally controlled soft finger and created/programmed a soft gripper for picking up objects. Soft grippers are known for having infinite degrees of freedom making them more difficult to control than conventional rigid actuators. These grippers are meant to simulate pneumatic pleated fluidic actuators. These tasks involved creating visual models, collision meshes, and surface meshes. ﻿
 
 Soft Finger:
